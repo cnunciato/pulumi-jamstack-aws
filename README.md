@@ -155,7 +155,7 @@ $ curl $(pulumi stack output apiEndpoint)/hello
 {"message":"Greetings from AWS Lambda!"}
 ```
 
-## Inputs
+## ➡️ Inputs
 
 * `siteRoot` (required): The absolute or relative path to folder containing the static website.
 * `domain` (optional): The domain name (e.g., "example.com"). Must be a Route53 hosted zone available in the account.
@@ -165,7 +165,7 @@ $ curl $(pulumi stack output apiEndpoint)/hello
 * `errorDocument` (optional): The default error document. Defaults to "404.html".
 * `api` (optional): An array of functions to expose as serverless handlers.
 
-## Outputs
+## ⬅️ Outputs
 
 * `bucketEndpoint`: The fully-qualified S3 website bucket URL.
 * `apiEndpoint`: The fully-qualified API Gateway URL and path prefix.
