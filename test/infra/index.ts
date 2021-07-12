@@ -1,12 +1,3 @@
-# pulumi-jamstack-aws
-
-A Pulumi component for managing Jamstack websites on AWS.
-
-```
-npm install --save @cnunciato/pulumi-jamstack-aws
-```
-
-```
 import * as pulumi from "@pulumi/pulumi";
 
 import { StaticWebsite } from "@cnunciato/pulumi-jamstack-aws";
@@ -31,5 +22,3 @@ const site = new StaticWebsite("my-site", {
 });
 
 export const { bucketEndpoint, apiEndpoint, cdnEndpoint, url } = site;
-
-```
