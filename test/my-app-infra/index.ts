@@ -14,11 +14,13 @@ const site = new StaticWebsite("my-site", {
             eventHandler: async () => {
                 return {
                     statusCode: 200,
-                    body: JSON.stringify({ hi: "nice to see you." })
+                    body: JSON.stringify({
+                        message: "Greetings from AWS Lambda!"
+                    }),
                 };
             },
         },
     ],
 });
 
-export const { bucketEndpoint, apiEndpoint, cdnEndpoint, url } = site;
+export const { apiEndpoint, url } = site;

@@ -2,17 +2,6 @@
 # yarn lockfile v1
 
 
-"@cnunciato/pulumi-jamstack-aws@^0.0.1":
-  version "0.0.1"
-  resolved "https://registry.yarnpkg.com/@cnunciato/pulumi-jamstack-aws/-/pulumi-jamstack-aws-0.0.1.tgz#2a5dd38139d6df8489a18d2475dbf3b8d907ae05"
-  integrity sha512-5tgtM/3BGf0QEQDqvLqcSvWHCNboDnbffKubkgokcOGW8UBujs50vSObApY+FmLh6+ku2UT2xkCMPJmXLjm8bg==
-  dependencies:
-    "@pulumi/aws" "^4.11.0"
-    "@pulumi/awsx" "^0.30.0"
-    "@pulumi/pulumi" "^3.6.1"
-    glob "^7.1.7"
-    mime "^2.5.2"
-
 "@grpc/grpc-js@^1.2.7":
   version "1.3.4"
   resolved "https://registry.yarnpkg.com/@grpc/grpc-js/-/grpc-js-1.3.4.tgz#5c4f5df717cd10cc5ebbc7523504008d1ff7b322"
@@ -78,7 +67,7 @@
   resolved "https://registry.yarnpkg.com/@protobufjs/utf8/-/utf8-1.1.0.tgz#a777360b5b39a1a2e5106f8e858f2fd2d060c570"
   integrity sha1-p3c2C1s5oaLlEG+OhY8v0tBgxXA=
 
-"@pulumi/aws@^4.0.0", "@pulumi/aws@^4.11.0":
+"@pulumi/aws@^4.0.0":
   version "4.12.0"
   resolved "https://registry.yarnpkg.com/@pulumi/aws/-/aws-4.12.0.tgz#873f2adfb502282eeed877a213e28e9a76e679e8"
   integrity sha512-hzFf1DrSXJvB4/fbySheTCN5YetUeqZCjYjB1CnoVGK+NtwoWV/PkrsyZYAy6VbJWGUcbivxDmz9KcAFwDdCNQ==
@@ -107,7 +96,7 @@
     "@pulumi/pulumi" "^3.0.0"
     semver "^5.4.0"
 
-"@pulumi/pulumi@^3.0.0", "@pulumi/pulumi@^3.6.1":
+"@pulumi/pulumi@^3.0.0":
   version "3.6.1"
   resolved "https://registry.yarnpkg.com/@pulumi/pulumi/-/pulumi-3.6.1.tgz#97db34c49a853d9c208edd8ca5d823d7aa5a30cb"
   integrity sha512-oHMXXh2szmsmDW+wfJMNY7cjuW/reCCBuOc760/vDL7+DkvYX0Id9ElEVPXZM8JgxfC2L2HGePtEKI6kCDEtqA==
@@ -320,7 +309,7 @@ get-intrinsic@^1.0.2, get-intrinsic@^1.1.1:
     has "^1.0.3"
     has-symbols "^1.0.1"
 
-glob@^7.1.1, glob@^7.1.7:
+glob@^7.1.1:
   version "7.1.7"
   resolved "https://registry.yarnpkg.com/glob/-/glob-7.1.7.tgz#3b193e9233f01d42d0b3f78294bbeeb418f94a90"
   integrity sha512-OvD9ENzPLbegENnYP5UUfJIirTg4+XwMWGaQfQTY0JenxNvvIKP3U3/tAQSPIu/lHxXYSZmpXlUHeqAIdKzBLQ==
@@ -479,7 +468,7 @@ make-error@^1.1.1:
   resolved "https://registry.yarnpkg.com/make-error/-/make-error-1.3.6.tgz#2eb2e37ea9b67c4891f684a1394799af484cf7a2"
   integrity sha512-s8UhlNe7vPKomQhC1qFelMokr/Sc3AgNbso3n74mVPA5LTZwkB9NlXf4XPamLxJE8h0gh73rM94xvwRT2CVInw==
 
-mime@^2.0.0, mime@^2.5.2:
+mime@^2.0.0:
   version "2.5.2"
   resolved "https://registry.yarnpkg.com/mime/-/mime-2.5.2.tgz#6e3dc6cc2b9510643830e5f19d5cb753da5eeabe"
   integrity sha512-tqkh47FzKeCPD2PUiPB6pkbMzsCasjxAfC62/Wap5qrUWcb+sFasXUC5I3gYM5iBM8v/Qpn4UK0x+j0iHyFPDg==

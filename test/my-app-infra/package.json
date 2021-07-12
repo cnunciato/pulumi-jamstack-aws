@@ -1,10 +1,10 @@
 {
-    "name": "pulumi-jamstack-aws-test",
+    "name": "my-app-infra",
     "devDependencies": {
         "@types/node": "^10.0.0"
     },
     "dependencies": {
-        "@cnunciato/pulumi-jamstack-aws": "^0.0.1",
+        "@cnunciato/pulumi-jamstack-aws": "0.0.3",
         "@pulumi/aws": "^4.0.0",
         "@pulumi/awsx": "^0.30.0",
         "@pulumi/pulumi": "^3.0.0"
