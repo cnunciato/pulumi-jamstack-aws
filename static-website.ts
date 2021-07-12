@@ -57,22 +57,34 @@ export class StaticWebsite extends pulumi.ComponentResource {
 
     private domainName: string;
 
+    /**
+     * The fully-qualified S3 website bucket URL.
+     */
     get bucketEndpoint(): pulumi.Output<string> {
         return this.bucket.websiteEndpoint.apply(e => pulumi.interpolate`http://${e}`);
     }
 
+    /**
+     * The fully-qualified API Gateway URL and path prefix.
+     */
     get apiEndpoint(): pulumi.Output<string> | undefined {
         if (this.api) {
             return this.api.url;
         }
     }
 
+    /**
+     * The CloudFront domain name (e.g., https://something.cloudfront.net).
+     */
     get cdnEndpoint(): pulumi.Output<string> | undefined {
         if (this.cdn) {
             return pulumi.interpolate`https://${this.cdn.domainName}`;
         }
     }
 
+    /**
+     * The publicly accessible URL of the website.
+     */
     get url(): pulumi.Output<string> | undefined {
         if (this.cdn) {
             return pulumi.interpolate`https://${this.domainName}`;

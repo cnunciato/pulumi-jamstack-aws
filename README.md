@@ -155,16 +155,19 @@ $ curl $(pulumi stack output apiEndpoint)/hello
 {"message":"Greetings from AWS Lambda!"}
 ```
 
-## Options
+## Inputs
 
-More on this soon, but here are the current options.
+* `siteRoot` (required): The absolute or relative path to folder containing the static website.
+* `domain` (optional): The domain name (e.g., "example.com"). Must be a Route53 hosted zone available in the account.
+* `host`  (optional) : The desired hostname (e.g., "www"). Combined with `domain` to form the final URL
+* `cacheTtl`  (optional): The number of seconds to keep items in the CloudFront cache. Defaults to 10 minutes.
+* `indexDocument` (optional): The home page document. Defaults to "index.html".
+* `errorDocument` (optional): The default error document. Defaults to "404.html".
+* `api` (optional): An array of functions to expose as serverless handlers.
 
-* `siteRoot` (required)
-* `domain`
-* `host`
-* `api`
-* `cacheTtl`
-* `indexDocument`
-* `errorDocument`
+## Outputs
 
-More on this soon.
+* `bucketEndpoint`: The fully-qualified S3 website bucket URL.
+* `apiEndpoint`: The fully-qualified API Gateway URL and path prefix.
+* `cdnEndpoint`: The CloudFront domain name (e.g., https://something.cloudfront.net).
+* `url`: The publicly accessible URL of the website.
