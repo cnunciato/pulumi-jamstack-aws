@@ -2,7 +2,7 @@
 
 A Pulumi component for managing Jamstack websites on AWS.
 
-### Install Pulumi
+### ☕️ Install Pulumi
 
 If you haven't already, install Pulumi with our package manager of choice.
 
@@ -10,7 +10,7 @@ If you haven't already, install Pulumi with our package manager of choice.
 $ brew install pulumi
 ```
 
-### Start with a folder containing a static website
+### 🗂 Start with a folder containing a static website
 
 If you don't already have a folder containing a static website, create an empty folder, then put a static website into it. The following snippet creates a new React app, runs an initial build, and places the built website into the `build` folder.
 
@@ -21,7 +21,7 @@ $ npm run build
 $ cd ..
 ```
 
-At this point, you'll have just the `my-app` folder containing your static-website source and build :
+At this point, you'll have just the `my-app` folder containing your static-website source and build:
 
 ```
 $ ls
@@ -38,7 +38,7 @@ robots.txt
 static
 ```
 
-### Create a new Pulumi project and stack
+### 🌥 Create a new Pulumi project and stack
 
 Next, make a new folder alongside the `my-app` folder for the Pulumi project and stack, change to that folder, and run the new-project wizard, following the prompts:
 
@@ -53,7 +53,7 @@ Configure the new stack to deploy the contents of the `../my-app/build` folder:
 $ pulumi config set siteRoot ../my-app/build
 ```
 
-### Install this component
+### ✨ Install this component
 
 Still in the `my-app-infra` folder, install this component:
 
@@ -61,7 +61,7 @@ Still in the `my-app-infra` folder, install this component:
 $ npm install --save @cnunciato/pulumi-jamstack-aws
 ```
 
-### Modify the program to deploy the website
+### 🔨 Modify the program to deploy the website
 
 Replace the contents of `my-app-infra/index.ts` with the following program, which deploys the `../my-app/build` folder as a static AWS S3 website and adds a single AWS Lambda callback function:
 
@@ -94,9 +94,9 @@ const site = new StaticWebsite("my-site", {
 export const { apiEndpoint, url } = site;
 ```
 
-### Deploy
+### 🧑🏻‍💻 Deploy
 
-The p
+The program above deploys the built React app as an S3 static website and a single AWS Lambda function using AWS API Gateway.
 
 ```
 $ pulumi up
@@ -142,7 +142,7 @@ Resources:
 Duration: 39s
 ```
 
-### Browse to the site and curl the API endpoint
+### 🙌 Browse to the site and curl the API endpoint
 
 ```
 $ open $(pulumi stack output url)
@@ -159,7 +159,7 @@ $ curl $(pulumi stack output apiEndpoint)/hello
 
 * `siteRoot` (required): The absolute or relative path to folder containing the static website.
 * `domain` (optional): The domain name (e.g., "example.com"). Must be a Route53 hosted zone available in the account.
-* `host`  (optional) : The desired hostname (e.g., "www"). Combined with `domain` to form the final URL
+* `host`  (optional): The desired hostname (e.g., "www"). Combined with `domain` to form the final URL
 * `cacheTtl`  (optional): The number of seconds to keep items in the CloudFront cache. Defaults to 10 minutes.
 * `indexDocument` (optional): The home page document. Defaults to "index.html".
 * `errorDocument` (optional): The default error document. Defaults to "404.html".
