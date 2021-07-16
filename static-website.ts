@@ -10,7 +10,7 @@ export interface StaticWebsiteCacheRules {
     ttl: number;
 }
 
-export type StaticWebsiteServerlessFunction = awsx.apigateway.Route;
+export type StaticWebsiteAPIRoute = awsx.apigateway.Route;
 
 export interface StaticWebsiteArgs {
 
@@ -18,6 +18,16 @@ export interface StaticWebsiteArgs {
      * The absolute or relative path to folder containing the static website.
      */
     siteRoot: string;
+
+    /**
+     * Whether to provision a CloudFront CDN for the website.
+     */
+    cdn?: boolean;
+
+    /**
+     * Whether to capture logs.
+     */
+    logs?: boolean;
 
     /**
      * The domain name (e.g., "example.com"). Must be a Route53 hosted zone available in the account.
@@ -47,65 +57,47 @@ export interface StaticWebsiteArgs {
     /**
      * An array of functions to expose as serverless handlers.
      */
-    api?: StaticWebsiteServerlessFunction[];
+    api?: {
+        prefix: string;
+        routes: StaticWebsiteAPIRoute[];
+    }
 }
 
 export class StaticWebsite extends pulumi.ComponentResource {
     private bucket: aws.s3.Bucket;
-    private cdn?: aws.cloudfront.Distribution;
+    private logsBucket?: aws.s3.Bucket;
     private api?: awsx.apigateway.API;
 
-    private domainName: string;
+    private args: StaticWebsiteArgs;
 
-    /**
-     * The fully-qualified S3 website bucket URL.
-     */
-    get bucketEndpoint(): pulumi.Output<string> {
-        return this.bucket.websiteEndpoint.apply(e => pulumi.interpolate`http://${e}`);
+    private get domainName(): string | undefined {
+        return this.args.host && this.args.domain
+            ? [ this.args.host, this.args.domain ].join(".")
+            : undefined;
     }
 
-    /**
-     * The fully-qualified API Gateway URL and path prefix.
-     */
-    get apiEndpoint(): pulumi.Output<string> | undefined {
-        if (this.api) {
-            return this.api.url;
-        }
-    }
+    bucketName: pulumi.Output<string>;
+    bucketWebsiteURL: pulumi.Output<string>;
+    cdnDomainName?: pulumi.Output<string>;
+    cdnURL?: pulumi.Output<string>;
+    websiteURL?: pulumi.Output<string>;
+    websiteLogsBucketName?: pulumi.Output<string>;
+    apiGatewayURL?: pulumi.Output<string>;
 
     /**
-     * The CloudFront domain name (e.g., https://something.cloudfront.net).
-     */
-    get cdnEndpoint(): pulumi.Output<string> | undefined {
-        if (this.cdn) {
-            return pulumi.interpolate`https://${this.cdn.domainName}`;
-        }
-    }
-
-    /**
-     * The publicly accessible URL of the website.
-     */
-    get url(): pulumi.Output<string> | undefined {
-        if (this.cdn) {
-            return pulumi.interpolate`https://${this.domainName}`;
-        }
-        return this.bucketEndpoint;
-    }
-
-    /**
-    * A Pulumi component resource that creates an S3 static website with an optional HTTPS URL.
+    * A Pulumi component resource that creates an S3 static website with an optional CloudFront CDN, domain name, and API Gateway .
     */
     constructor(name: string, args: StaticWebsiteArgs, opts?: pulumi.CustomResourceOptions) {
         super("pulumi-s3-static-website:index:StaticWebsite", name, args, opts);
 
-        this.domainName = [ args.host, args.domain ].join(".");
+        this.args = args;
 
         this.bucket = new aws.s3.Bucket(
             "website-bucket",
             {
                 website: {
-                    indexDocument: args.indexDocument || "index.html",
-                    errorDocument: args.errorDocument || "404.html",
+                    indexDocument: this.args.indexDocument || "index.html",
+                    errorDocument: this.args.errorDocument || "404.html",
                 },
                 acl: aws.s3.PublicReadAcl,
                 forceDestroy: true,
@@ -115,178 +107,16 @@ export class StaticWebsite extends pulumi.ComponentResource {
             },
         );
 
-        if (args.api && args.api.length > 0) {
-            this.api = new awsx.apigateway.API(
-                "website-api",
-                {
-                    routes: args.api,
-                },
-                {
-                    parent: this,
-                },
-            );
-        }
-
-        if (args.host && args.domain) {
-            const tenMinutesInSeconds = 60 * 10;
-            const cacheTtl = args.cacheTtlInSeconds || tenMinutesInSeconds;
-
-            const usEast1 = new aws.Provider(
-                "website-cert-provider",
-                {
-                    region: "us-east-1"
-                },
-                {
-                    parent: this,
-                },
-            );
-
-            const cert = new aws.acm.Certificate(
-                "website-cert",
-                {
-                    domainName: this.domainName,
-                    validationMethod: "DNS",
-                },
-                {
-                    parent: this,
-                    provider: usEast1,
-                },
-            );
-
-            (async () => {
-                const zone = await aws.route53.getZone({ name: args.domain });
-                const validationOption = cert.domainValidationOptions[0];
-
-                const certificateValidationDomain = new aws.route53.Record(
-                    "website-cert-validation-record",
-                    {
-                        zoneId: zone.zoneId,
-                        name: validationOption.resourceRecordName,
-                        type: validationOption.resourceRecordType,
-                        records: [
-                            validationOption.resourceRecordValue,
-                        ],
-                        ttl: cacheTtl,
-                    },
-                    {
-                        parent: this,
-                    },
-                );
-
-                const certificateValidation = new aws.acm.CertificateValidation(
-                    "website-cert-validation",
-                    {
-                        certificateArn: cert.arn,
-                        validationRecordFqdns: [
-                            certificateValidationDomain.fqdn
-                        ],
-                    },
-                    {
-                        provider: usEast1,
-                        parent: this,
-                    },
-                );
-            })();
-
-            // Define the properties of the CloudFront distribution.
-            const distributionArgs: aws.cloudfront.DistributionArgs = {
-                enabled: true,
-                aliases: [
-                    this.domainName,
-                ],
-                origins: [
-                    {
-                        originId: this.bucket.arn,
-                        domainName: this.bucket.websiteEndpoint,
-                        customOriginConfig: {
-                            originProtocolPolicy: "http-only",
-                            httpPort: 80,
-                            httpsPort: 443,
-                            originSslProtocols: ["TLSv1.2"],
-                        },
-                    }
-                ],
-
-                // Not specifying a default root object seems necessary, though I'm not entirely sure why.
-                // (Using index.html, or just index, leads to a 404.)
-                defaultRootObject: undefined,
-
-                defaultCacheBehavior: {
-                    targetOriginId: this.bucket.arn,
-                    viewerProtocolPolicy: "redirect-to-https",
-                    allowedMethods: ["GET", "HEAD", "OPTIONS"],
-                    cachedMethods: ["GET", "HEAD", "OPTIONS"],
-                    defaultTtl: cacheTtl,
-                    maxTtl: cacheTtl,
-                    minTtl: 0,
-                    forwardedValues: {
-                        queryString: true,
-                        cookies: {
-                            forward: "all"
-                        },
-                    },
-                },
-                priceClass: "PriceClass_100",
-                customErrorResponses: [
-                    {
-                        errorCode: 404,
-                        responseCode: 404,
-                        responsePagePath: "/404",
-                    },
-                ],
-                restrictions: {
-                    geoRestriction: {
-                        restrictionType: "none",
-                    },
-                },
-                viewerCertificate: {
-                    acmCertificateArn: cert.arn,
-                    sslSupportMethod: "sni-only",
-                },
-            };
-
-            this.cdn = new aws.cloudfront.Distribution(
-                "website-cdn",
-                distributionArgs,
-                {
-                    parent: this,
-                },
-            );
-
-            (async (targetDomain: string, distribution: aws.cloudfront.Distribution): Promise<aws.route53.Record> => {
-                const zone = await aws.route53.getZone({ name: args.domain });
-
-                return new aws.route53.Record(
-                    targetDomain,
-                    {
-                        name: args.host || "should-not-be-necessary",
-                        zoneId: zone.zoneId,
-                        type: "A",
-                        aliases: [
-                            {
-                                name: distribution.domainName,
-                                zoneId: distribution.hostedZoneId,
-                                evaluateTargetHealth: true,
-                            },
-                        ],
-                    },
-                    {
-                        parent: this,
-                    },
-                );
-            })(this.domainName, this.cdn);
-        }
-
         this.bucket.id.apply(async (bucket) => {
-            const files = glob.sync(`${args.siteRoot}/**/*`, { nodir: true });
+            const files = glob.sync(`${this.args.siteRoot}/**/*`, { nodir: true });
 
             if (pulumi.runtime.isDryRun()) {
-                pulumi.log.info(`Skipped uploading ${files.length} files from ${args.siteRoot} (preview)...`)
+                pulumi.log.info(`Skipped uploading ${files.length} files from ${this.args.siteRoot} (preview)...`)
                 return;
             }
 
             try {
-                pulumi.log.info(`Uploading ${files.length} files from ${args.siteRoot}...`);
+                pulumi.log.info(`Uploading ${files.length} files from ${this.args.siteRoot}...`);
 
                 const result = await Promise.all(
                     files.map(file => {
@@ -294,7 +124,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
 
                         return s3.putObject({
                             Bucket: bucket,
-                            Key: file.replace(`${args.siteRoot}/`, ""),
+                            Key: file.replace(`${this.args.siteRoot}/`, ""),
                             Body: fs.readFileSync(file),
                             ContentType: mime.getType(file) || "text/plain",
                             ACL: aws.s3.PublicReadAcl,
@@ -307,5 +137,293 @@ export class StaticWebsite extends pulumi.ComponentResource {
                 pulumi.log.error(err);
             }
         });
+
+        this.bucketName = this.bucket.bucket;
+        this.bucketWebsiteURL = this.bucket.websiteEndpoint.apply(e => pulumi.interpolate`http://${e}`);
+
+        // When one or more API routes are passed in, provision an API Gateway with them.
+        if (this.args.api && this.args.api.prefix && this.args.api.routes && this.args.api.routes.length > 0) {
+            this.api = new awsx.apigateway.API(
+                "website-api",
+                {
+                    stageName: this.args.api.prefix,
+                    routes: this.args.api.routes.map(route => {
+                        route.path = `/${this.args.api?.prefix}${route.path}`;
+                        return route;
+                    }),
+                },
+                {
+                    parent: this,
+                },
+            );
+
+            this.apiGatewayURL = this.api.url;
+        }
+
+        // When a host and domain are present OR `cdn` is true, provision a CloudFront distribution.
+        if ((this.args.host && this.args.domain) || this.args.cdn) {
+            const cdn = this.provisionCDN();
+            const domainName = this.domainName;
+
+            this.cdnDomainName = cdn.domainName;
+            this.cdnURL = pulumi.interpolate`https://${cdn.domainName}`;
+            this.websiteURL = pulumi.output(`https://${domainName}`);
+        }
+
+        this.registerOutputs({
+            bucketName: this.bucketName,
+            bucketWebsiteURL: this.bucketWebsiteURL,
+            cdnDomainName: this.cdnDomainName,
+            cdnURL: this.cdnURL,
+            websiteURL: this.websiteURL,
+            websiteLogsBucketName: this.websiteLogsBucketName,
+            apiGatewayURL: this.apiGatewayURL,
+        });
+    }
+
+    private provisionCDN(): aws.cloudfront.Distribution {
+        const cacheTtl = 10 * 60;
+        let cdn: aws.cloudfront.Distribution;
+
+        const bucketOrigin: aws.types.input.cloudfront.DistributionOrigin = {
+            originId: this.bucket.arn,
+            domainName: this.bucket.websiteEndpoint,
+            customOriginConfig: {
+                originProtocolPolicy: "http-only",
+                httpPort: 80,
+                httpsPort: 443,
+                originSslProtocols: ["TLSv1.2"],
+            },
+        }
+
+        // Define the properties of the CloudFront distribution.
+        const distributionArgs: aws.cloudfront.DistributionArgs = {
+            enabled: true,
+
+            origins: [
+                bucketOrigin,
+            ],
+
+            // Not specifying a default root object seems necessary, though I'm not entirely sure why.
+            // (Using index.html, or just index, leads to a 404.)
+            // defaultRootObject: undefined,
+
+            defaultCacheBehavior: {
+                targetOriginId: this.bucket.arn,
+                viewerProtocolPolicy: "https-only",
+                allowedMethods: ["GET", "HEAD", "OPTIONS"],
+                cachedMethods: ["GET", "HEAD", "OPTIONS"],
+                defaultTtl: cacheTtl,
+                maxTtl: cacheTtl,
+                minTtl: 0,
+                forwardedValues: {
+                    queryString: true,
+                    cookies: {
+                        forward: "all"
+                    },
+                },
+            },
+            priceClass: "PriceClass_100",
+            customErrorResponses: [
+                {
+                    errorCode: 404,
+                    responseCode: 404,
+                    responsePagePath: "/404.html",
+                },
+            ],
+            restrictions: {
+                geoRestriction: {
+                    restrictionType: "none",
+                },
+            },
+            viewerCertificate: {
+                cloudfrontDefaultCertificate: true,
+                sslSupportMethod: "sni-only",
+            },
+        };
+
+        if (this.args.host && this.args.domain && this.domainName) {
+
+            // Provision an validate a cert.
+            const cert = this.provisionAndValidateCert();
+
+            // Use the domain name for the CDN.
+            distributionArgs.aliases = [
+                this.domainName,
+            ];
+
+            // Use the cert.
+            distributionArgs.viewerCertificate = {
+                cloudfrontDefaultCertificate: false,
+                acmCertificateArn: cert.arn,
+                sslSupportMethod: "sni-only",
+            };
+
+            if (this.api && this.args.api && this.args.api.prefix) {
+                const apiGatewayOrigin: aws.types.input.cloudfront.DistributionOrigin = {
+                    originId: this.api.restAPI.arn,
+                    originPath: `/${this.args.api.prefix}`,
+                    domainName: this.api.url.apply(url => url.replace(`/${this.args.api?.prefix}/`, "").replace("https://", "")),
+                    customOriginConfig: {
+                        originProtocolPolicy: "https-only",
+                        httpPort: 80,
+                        httpsPort: 443,
+                        originSslProtocols: ["TLSv1.2"],
+                    },
+                };
+
+                distributionArgs.origins = [
+                    apiGatewayOrigin,
+                    bucketOrigin,
+                ];
+
+                distributionArgs.orderedCacheBehaviors = [
+                    {
+                        pathPattern: `/${this.args.api.prefix}/*`,
+                        targetOriginId: this.api.restAPI.arn,
+                        viewerProtocolPolicy: "https-only",
+                        allowedMethods: ["GET", "HEAD", "OPTIONS"],
+                        cachedMethods: ["GET", "HEAD", "OPTIONS"],
+                        defaultTtl: 0,
+                        maxTtl: 0,
+                        minTtl: 0,
+                        forwardedValues: {
+                            queryString: true,
+                            headers: [
+                                "Access-Control-Request-Headers",
+                                "Access-Control-Request-Method",
+                                "Origin",
+                                "Authorization",
+                            ],
+                            cookies: {
+                                forward: "none",
+                            },
+                        },
+                    },
+                ];
+            }
+
+            cdn = this.makeCDN(distributionArgs);
+
+            // Make a new Route53 record using the host and domain name.
+            const zone = aws.route53.getZone({ name: this.args.domain });
+            const record = new aws.route53.Record(
+                this.domainName,
+                {
+                    name: this.args.host,
+                    zoneId: zone.then(zone => zone.zoneId),
+                    type: "A",
+                    aliases: [
+                        {
+                            name: cdn.domainName,
+                            zoneId: cdn.hostedZoneId,
+                            evaluateTargetHealth: true,
+                        },
+                    ],
+                },
+                {
+                    parent: this,
+                },
+            );
+        } else {
+            cdn = this.makeCDN(distributionArgs);
+        }
+
+        return cdn;
+    }
+
+    private provisionAndValidateCert(): aws.acm.Certificate {
+
+        // Certs need to be provisioned in us-east-1.
+        const usEast1 = new aws.Provider(
+            "website-cert-provider",
+            {
+                region: "us-east-1"
+            },
+            {
+                parent: this,
+            },
+        );
+
+        const cert = new aws.acm.Certificate(
+            "website-cert",
+            {
+                domainName: this.domainName,
+                validationMethod: "DNS",
+            },
+            {
+                parent: this,
+                provider: usEast1,
+            },
+        );
+
+        const zone = aws.route53.getZone({ name: this.args.domain });
+        const validationOption = cert.domainValidationOptions[0];
+
+        const certificateValidationDomain = new aws.route53.Record(
+            "website-cert-validation-record",
+            {
+                zoneId: zone.then(zone => zone.zoneId),
+                name: validationOption.resourceRecordName,
+                type: validationOption.resourceRecordType,
+                records: [
+                    validationOption.resourceRecordValue,
+                ],
+                ttl: 10 * 60, // Ten minutes, in seconds.
+            },
+            {
+                parent: this,
+            },
+        );
+
+        const certificateValidation = new aws.acm.CertificateValidation(
+            "website-cert-validation",
+            {
+                certificateArn: cert.arn,
+                validationRecordFqdns: [
+                    certificateValidationDomain.fqdn
+                ],
+            },
+            {
+                provider: usEast1,
+                parent: this,
+            },
+        );
+
+        return cert;
+    }
+
+    private makeCDN(distributionArgs: aws.cloudfront.DistributionArgs): aws.cloudfront.Distribution {
+
+        let opts: pulumi.CustomResourceOptions = {
+            parent: this,
+        };
+
+        if (this.args.logs) {
+            this.logsBucket = new aws.s3.Bucket(
+                "website-logs-bucket",
+                {
+                    forceDestroy: true,
+                },
+                {
+                    parent: this,
+                },
+            );
+
+            distributionArgs.loggingConfig = {
+                bucket: this.logsBucket.bucketDomainName,
+                includeCookies: false,
+            };
+
+            opts.dependsOn = [ this.logsBucket ];
+
+            this.websiteLogsBucketName = this.logsBucket.bucket;
+        }
+
+        return new aws.cloudfront.Distribution(
+            "website-cdn",
+            distributionArgs,
+            opts,
+        );
     }
 }

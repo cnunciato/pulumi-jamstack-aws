@@ -53,6 +53,13 @@ Configure the new stack to deploy the contents of the `../my-app/build` folder:
 $ pulumi config set siteRoot ../my-app/build
 ```
 
+Optionally, if you have a domain registered with Route53, use that to apply a custom domain name and an SSL cert:
+
+```
+$ pulumi config set domain nunciato.org
+$ pulumi config set host mysite
+```
+
 ### ✨ Install this component
 
 Still in the `my-app-infra` folder, install this component:
@@ -65,67 +72,92 @@ $ npm install --save @cnunciato/pulumi-jamstack-aws
 
 Replace the contents of `my-app-infra/index.ts` with the following program, which deploys the `../my-app/build` folder as a static AWS S3 website and adds a single AWS Lambda callback function:
 
-```
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 
 import { StaticWebsite } from "@cnunciato/pulumi-jamstack-aws";
 
 const config = new pulumi.Config();
 const siteRoot = config.require("siteRoot");
+const domain = config.get("domain");
+const host = config.get("host");
 
 const site = new StaticWebsite("my-site", {
     siteRoot,
-    api: [
-        {
-            method: "GET",
-            path: "/hello",
-            eventHandler: async () => {
-                return {
-                    statusCode: 200,
-                    body: JSON.stringify({
-                        message: "Greetings from AWS Lambda!"
-                    }),
-                };
+    domain,
+    host,
+    logs: true,
+    api: {
+        prefix: "api",
+        routes: [
+            {
+                method: "GET",
+                path: "/hello",
+                eventHandler: async () => {
+                    return {
+                        statusCode: 200,
+                        body: JSON.stringify({
+                            message: "Hello, world!!",
+                        }),
+                    };
+                },
             },
-        },
-    ],
+        ],
+    },
 });
 
-export const { apiEndpoint, url } = site;
+export const {
+    bucketName,
+    bucketWebsiteURL,
+    websiteURL,
+    websiteLogsBucketName,
+    apiGatewayURL,
+    cdnDomainName,
+    cdnURL,
+} = site;
 ```
 
 ### 🧑🏻‍💻 Deploy
 
-The program above deploys the built React app as an S3 static website and a single AWS Lambda function using AWS API Gateway.
+The program above deploys the built React app as an S3 static website with a CloudFront CDN and a single serverless function powered by AWS API Gateway.
 
 ```
 $ pulumi up
+
 Previewing update (dev)
 ...
+
 Updating (dev)
 
-View Live: https://app.pulumi.com/cnunciato/my-app-infra/dev/updates/1
+View Live: https://app.pulumi.com/cnunciato/my-app-infra/dev/updates/51
 
-     Type                                             Name                          Status      Info
- +   pulumi:pulumi:Stack                              my-app-infra-dev              created     2 messages
- +   └─ pulumi-s3-static-website:index:StaticWebsite  my-site                       created
- +      ├─ aws:apigateway:x:API                       website-api                   created
- +      │  ├─ aws:iam:Role                            website-apifc45ff03           created
- +      │  ├─ aws:lambda:Function                     website-apifc45ff03           created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-1b4caae3  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-019020e7  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-6c156834  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-4aaabb8e  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-b5aeb6b6  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-e1a3786d  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-a1de8170  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-74d12784  created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-apifc45ff03-7cd09230  created
- +      │  ├─ aws:apigateway:RestApi                  website-api                   created
- +      │  ├─ aws:apigateway:Deployment               website-api                   created
- +      │  ├─ aws:lambda:Permission                   website-api-62a1b306          created
- +      │  └─ aws:apigateway:Stage                    website-api                   created
- +      └─ aws:s3:Bucket                              website-bucket                created
+     Type                                             Name                            Status      Info
+ +   pulumi:pulumi:Stack                              my-app-infra-dev                created     2 messages
+ +   └─ pulumi-s3-static-website:index:StaticWebsite  my-site                         created
+ +      ├─ aws:apigateway:x:API                       website-api                     created
+ +      │  ├─ aws:iam:Role                            website-api556be5ef             created
+ +      │  ├─ aws:lambda:Function                     website-api556be5ef             created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-7cd09230    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-019020e7    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-1b4caae3    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-74d12784    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-6c156834    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-e1a3786d    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-b5aeb6b6    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-a1de8170    created
+ +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-4aaabb8e    created
+ +      │  ├─ aws:apigateway:RestApi                  website-api                     created
+ +      │  ├─ aws:apigateway:Deployment               website-api                     created
+ +      │  ├─ aws:lambda:Permission                   website-api-25e7c55b            created
+ +      │  └─ aws:apigateway:Stage                    website-api                     created
+ +      ├─ pulumi:providers:aws                       website-cert-provider           created
+ +      ├─ aws:s3:Bucket                              website-logs-bucket             created
+ +      ├─ aws:s3:Bucket                              website-bucket                  created
+ +      ├─ aws:acm:Certificate                        website-cert                    created
+ +      ├─ aws:route53:Record                         website-cert-validation-record  created
+ +      ├─ aws:cloudfront:Distribution                website-cdn                     created
+ +      ├─ aws:acm:CertificateValidation              website-cert-validation         created
+ +      └─ aws:route53:Record                         mysite.nunciato.org             created
 
 Diagnostics:
   pulumi:pulumi:Stack (my-app-infra-dev):
@@ -133,41 +165,26 @@ Diagnostics:
     Uploaded 19 files.
 
 Outputs:
-    apiEndpoint: "https://0rvd7ip4i0.execute-api.us-west-2.amazonaws.com/stage/"
-    url        : "http://website-bucket-747d634.s3-website-us-west-2.amazonaws.com"
+    apiGatewayURL        : "https://mhwjazmf86.execute-api.us-west-2.amazonaws.com/api/"
+    bucketName           : "website-bucket-3fa140b"
+    bucketWebsiteURL     : "http://website-bucket-3fa140b.s3-website-us-west-2.amazonaws.com"
+    cdnDomainName        : "d1lrmibvyanw0m.cloudfront.net"
+    cdnURL               : "https://d1lrmibvyanw0m.cloudfront.net"
+    websiteLogsBucketName: "website-logs-bucket-56c3ea2"
+    websiteURL           : "https://mysite.nunciato.org"
 
 Resources:
-    + 19 created
+    + 26 created
 
-Duration: 39s
+Duration: 3m51s
 ```
 
 ### 🙌 Browse to the site and curl the API endpoint
 
 ```
-$ open $(pulumi stack output url)
+$ open $(pulumi stack output websiteURL)
 ```
 
-![image](https://user-images.githubusercontent.com/274700/125365415-0f9c5500-e329-11eb-8c90-2f25fba6ee3a.png)
+![image](https://user-images.githubusercontent.com/274700/126010822-b6a08f6e-587c-4880-bd6f-af8bee08a564.png)
 
-```
-$ curl $(pulumi stack output apiEndpoint)/hello
-{"message":"Greetings from AWS Lambda!"}
-```
-
-## ➡️ Inputs
-
-* `siteRoot` (required): The absolute or relative path to folder containing the static website.
-* `domain` (optional): The domain name (e.g., "example.com"). Must be a Route53 hosted zone available in the account.
-* `host`  (optional): The desired hostname (e.g., "www"). Combined with `domain` to form the final URL
-* `cacheTtl`  (optional): The number of seconds to keep items in the CloudFront cache. Defaults to 10 minutes.
-* `indexDocument` (optional): The home page document. Defaults to "index.html".
-* `errorDocument` (optional): The default error document. Defaults to "404.html".
-* `api` (optional): An array of functions to expose as serverless handlers.
-
-## ⬅️ Outputs
-
-* `bucketEndpoint`: The fully-qualified S3 website bucket URL.
-* `apiEndpoint`: The fully-qualified API Gateway URL and path prefix.
-* `cdnEndpoint`: The CloudFront domain name (e.g., https://something.cloudfront.net).
-* `url`: The publicly accessible URL of the website.
+![image](https://user-images.githubusercontent.com/274700/126010924-6aacf45d-6734-43ce-a2d8-4aa17ef7329a.png)
