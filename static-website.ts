@@ -20,6 +20,13 @@ export interface StaticWebsiteArgs {
     siteRoot: string;
 
     /**
+     * A unique bucket name. In most cases, you shouldn't use this -- but if you *need* to specify
+     * a bucket name, like if you're trying to use a CNAME to route traffic directly to an S3-hosted
+     * website, you can use this.
+     */
+    bucketName?: string;
+
+    /**
      * Whether to provision a CloudFront CDN for the website.
      */
     cdn?: boolean;
@@ -95,6 +102,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
         this.bucket = new aws.s3.Bucket(
             "website-bucket",
             {
+                bucket: this.args.bucketName,
                 website: {
                     indexDocument: this.args.indexDocument || "index.html",
                     errorDocument: this.args.errorDocument || "404.html",
@@ -108,6 +116,15 @@ export class StaticWebsite extends pulumi.ComponentResource {
         );
 
         this.bucket.id.apply(async (bucket) => {
+
+            // Check that the directory exists.
+            if (!fs.existsSync(this.args.siteRoot)) {
+                throw new Error(`Directory ${this.args.siteRoot} does not exist.`);
+            }
+
+            // Check that the default document exists.
+            // TODO: This.
+
             const files = glob.sync(`${this.args.siteRoot}/**/*`, { nodir: true });
 
             if (pulumi.runtime.isDryRun()) {
@@ -395,7 +412,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
 
     private makeCDN(distributionArgs: aws.cloudfront.DistributionArgs): aws.cloudfront.Distribution {
 
-        let opts: pulumi.CustomResourceOptions = {
+        let distributionOpts: pulumi.CustomResourceOptions = {
             parent: this,
         };
 
@@ -415,7 +432,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
                 includeCookies: false,
             };
 
-            opts.dependsOn = [ this.logsBucket ];
+            distributionOpts.dependsOn = [ this.logsBucket ];
 
             this.websiteLogsBucketName = this.logsBucket.bucket;
         }
@@ -423,7 +440,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
         return new aws.cloudfront.Distribution(
             "website-cdn",
             distributionArgs,
-            opts,
+            distributionOpts,
         );
     }
 }

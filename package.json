@@ -1,11 +1,21 @@
 {
     "name": "@cnunciato/pulumi-jamstack-aws",
-    "version": "0.0.4",
-    "description": "A Pulumi component for managing Jamstack websites on AWS.",
+    "version": "0.0.6",
+    "description": "A Pulumi component for managing static websites and serverless APIs on AWS.",
     "main": "index.js",
     "repository": "https://github.com/cnunciato/pulumi-jamstack-aws",
     "author": "Christian Nunciato <chris@nunciato.org>",
     "license": "MIT",
+    "keywords": [
+        "pulumi",
+        "jamstack",
+        "aws",
+        "static-websites",
+        "cloudfront",
+        "api-gateway",
+        "serverless",
+        "cloud"
+    ],
     "devDependencies": {
         "@types/glob": "^7.1.4",
         "@types/mime": "^2.0.3",

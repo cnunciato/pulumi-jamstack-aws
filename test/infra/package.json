@@ -1,5 +1,5 @@
 {
-    "name": "my-app-infra",
+    "name": "pulumi-jamstack-aws-infra",
     "devDependencies": {
         "@types/node": "^10.0.0"
     },

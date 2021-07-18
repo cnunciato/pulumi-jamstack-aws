@@ -1,0 +1,3 @@
+name: pulumi-jamstack-aws-infra
+runtime: nodejs
+description: An example app that uses pulumi-jamstack-aws.

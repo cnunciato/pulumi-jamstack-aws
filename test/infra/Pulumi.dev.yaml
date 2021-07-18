@@ -1,0 +1,5 @@
+config:
+  aws:region: us-west-2
+  pulumi-jamstack-aws-infra:domain: nunciato.org
+  pulumi-jamstack-aws-infra:host: dev
+  pulumi-jamstack-aws-infra:siteRoot: ../site/build
