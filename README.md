@@ -2,7 +2,7 @@
 
 A [Pulumi](https://pulumi.io/) component for managing JAMstack websites on AWS. ([What's a JAMstack](https://jamstack.wtf/)?)
 
-### ☕️ Install Pulumi
+### Install Pulumi
 
 If you haven't already, install Pulumi with your package manager of choice.
 
@@ -182,9 +182,8 @@ $ open $(pulumi stack output websiteURL)
 
 ```
 $ curl -v $(pulumi stack output websiteURL)/api/hello
+{"message":"Hello, world!!"}
 ```
-
-![image](https://user-images.githubusercontent.com/274700/126080946-d90dc184-07da-4a3c-b1bb-ea29ee8bf3dd.png)
 
 ### 7. (Optional) Tear it all down
 

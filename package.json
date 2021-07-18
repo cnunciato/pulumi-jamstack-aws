@@ -1,6 +1,6 @@
 {
     "name": "@cnunciato/pulumi-jamstack-aws",
-    "version": "0.0.6",
+    "version": "0.0.7",
     "description": "A Pulumi component for managing static websites and serverless APIs on AWS.",
     "main": "index.js",
     "repository": "https://github.com/cnunciato/pulumi-jamstack-aws",
