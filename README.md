@@ -63,7 +63,7 @@ $ npm install --save @cnunciato/pulumi-jamstack-aws
 
 ### 4. Modify the program to use the component
 
-Replace the contents of `infra/index.ts` with the following program (for example), which deploys the `../site/build` folder as a static website on Amazon S3 website, distributes it globally with a CloudFront CDN, uses a custom domain name (via Route 53) with SSL/TLS, and adds a single serverless API endpoint using AWS Lambda:
+Replace the contents of `infra/index.ts` with the following program (for example), which deploys the `../site/build` folder as a static website on Amazon S3, distributes it globally with a CloudFront CDN, uses a custom domain name (via Route 53) with SSL/TLS, and adds a single serverless API endpoint using AWS Lambda:
 
 ```typescript
 import * as pulumi from "@pulumi/pulumi";
