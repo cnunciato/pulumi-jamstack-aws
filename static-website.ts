@@ -3,162 +3,192 @@ import * as awsx from "@pulumi/awsx";
 import * as aws from "@pulumi/aws";
 import * as glob from "glob";
 import * as mime from "mime";
+import * as path from "path";
 import * as fs from "fs"
 
-export interface StaticWebsiteCacheRules {
-    pattern: RegExp;
-    ttl: number;
-}
+export type WebsiteAPIRoute = awsx.apigateway.Route;
 
-export type StaticWebsiteAPIRoute = awsx.apigateway.Route;
+export interface WebsiteArgs {
+    protocol?: "http" | "https";
 
-export interface StaticWebsiteArgs {
+    site?: {
+        root: string;
+        defaultDoc?: string;
+        errorDoc?: string;
+    }
 
-    /**
-     * The absolute or relative path to folder containing the static website.
-     */
-    siteRoot: string;
+    dns?: {
+        domain: string;
+        host: string;
+    };
 
-    /**
-     * A unique bucket name. In most cases, you shouldn't use this -- but if you *need* to specify
-     * a bucket name, like if you're trying to use a CNAME to route traffic directly to an S3-hosted
-     * website, you can use this.
-     */
-    bucketName?: string;
+    cdn?: {
+        certificateARN?: string;
+        cacheTTL?: number;
+        logs?: boolean;
+    }
 
-    /**
-     * Whether to provision a CloudFront CDN for the website.
-     */
-    cdn?: boolean;
-
-    /**
-     * Whether to capture logs.
-     */
-    logs?: boolean;
-
-    /**
-     * The domain name (e.g., "example.com"). Must be a Route53 hosted zone available in the account.
-     */
-    domain?: string;
-
-    /**
-     * The desired hostname (e.g., "www"). Combined with `domain` to form the final URL.
-     */
-    host?: string;
-
-    /**
-     * The home page document. Defaults to "index.html".
-     */
-    indexDocument?: string;
-
-    /**
-     * The default error document. Defaults to "404.html".
-     */
-    errorDocument?: string;
-
-    /**
-     * The number of seconds to keep items in the CloudFront cache. Defaults to 10 minutes.
-     */
-    cacheTtlInSeconds?: number;
-
-    /**
-     * An array of functions to expose as serverless handlers.
-     */
     api?: {
         prefix: string;
-        routes: StaticWebsiteAPIRoute[];
+        routes: WebsiteAPIRoute[];
     }
 }
 
-export class StaticWebsite extends pulumi.ComponentResource {
-    private bucket: aws.s3.Bucket;
-    private logsBucket?: aws.s3.Bucket;
-    private api?: awsx.apigateway.API;
-
-    private args: StaticWebsiteArgs;
-
-    private get domainName(): string | undefined {
-        return this.args.host && this.args.domain
-            ? [ this.args.host, this.args.domain ].join(".")
-            : undefined;
-    }
-
-    bucketName: pulumi.Output<string>;
-    bucketWebsiteURL: pulumi.Output<string>;
+interface WebsiteOutputs {
+    bucketName?: pulumi.Output<string>;
+    bucketWebsiteURL?: pulumi.Output<string>;
     cdnDomainName?: pulumi.Output<string>;
     cdnURL?: pulumi.Output<string>;
     websiteURL?: pulumi.Output<string>;
     websiteLogsBucketName?: pulumi.Output<string>;
     apiGatewayURL?: pulumi.Output<string>;
+}
+
+export class Website extends pulumi.ComponentResource {
+    private bucket?: aws.s3.Bucket;
+    private logsBucket?: aws.s3.Bucket;
+    private api?: awsx.apigateway.API;
+
+    private args: WebsiteArgs;
+    outputs: WebsiteOutputs;
 
     /**
     * A Pulumi component resource that creates an S3 static website with an optional CloudFront CDN, domain name, and API Gateway .
     */
-    constructor(name: string, args: StaticWebsiteArgs, opts?: pulumi.CustomResourceOptions) {
-        super("pulumi-s3-static-website:index:StaticWebsite", name, args, opts);
+    constructor(name: string, args: WebsiteArgs, opts?: pulumi.CustomResourceOptions) {
+        super("pulumi-s3-static-website:index:Website", name, args, opts);
 
         this.args = args;
+        this.outputs = {};
 
-        this.bucket = new aws.s3.Bucket(
-            "website-bucket",
-            {
-                bucket: this.args.bucketName,
-                website: {
-                    indexDocument: this.args.indexDocument || "index.html",
-                    errorDocument: this.args.errorDocument || "404.html",
-                },
-                acl: aws.s3.PublicReadAcl,
-                forceDestroy: true,
-            },
-            {
-                parent: this,
-            },
-        );
+        // Apply defaults.
+        if (!args.protocol) {
+            args.protocol = "http";
+        }
 
-        this.bucket.id.apply(async (bucket) => {
+        // If a site was defined, make a bucket for it.
+        if (args.site) {
+
+            if (!args.site.defaultDoc) {
+                args.site.defaultDoc = "index.html";
+            }
+
+            if (!args.site.errorDoc) {
+                args.site.errorDoc = "404.html";
+            }
 
             // Check that the directory exists.
-            if (!fs.existsSync(this.args.siteRoot)) {
-                throw new Error(`Directory ${this.args.siteRoot} does not exist.`);
+            if (!fs.existsSync(args.site.root)) {
+                pulumi.log.warn(`Directory ${args.site.root} does not exist.`);
             }
 
             // Check that the default document exists.
-            // TODO: This.
-
-            const files = glob.sync(`${this.args.siteRoot}/**/*`, { nodir: true });
-
-            if (pulumi.runtime.isDryRun()) {
-                pulumi.log.info(`Skipped uploading ${files.length} files from ${this.args.siteRoot} (preview)...`)
-                return;
+            if (!fs.existsSync(path.join(args.site.root, args.site.defaultDoc))) {
+                pulumi.log.warn(`Default document "${args.site.defaultDoc}" does not exist.`);
             }
 
-            try {
-                pulumi.log.info(`Uploading ${files.length} files from ${this.args.siteRoot}...`);
-
-                const result = await Promise.all(
-                    files.map(file => {
-                        const s3 = new aws.sdk.S3();
-
-                        return s3.putObject({
-                            Bucket: bucket,
-                            Key: file.replace(`${this.args.siteRoot}/`, ""),
-                            Body: fs.readFileSync(file),
-                            ContentType: mime.getType(file) || "text/plain",
-                            ACL: aws.s3.PublicReadAcl,
-                        }).promise();
-                    }),
-                );
-
-                pulumi.log.info(`Uploaded ${result.length} files.`);
-            } catch (err) {
-                pulumi.log.error(err);
+            // Check that the error document exists.
+            if (!fs.existsSync(path.join(args.site.root, args.site.errorDoc))) {
+                pulumi.log.warn(`Default document "${args.site.errorDoc}" does not exist.`);
             }
-        });
 
-        this.bucketName = this.bucket.bucket;
-        this.bucketWebsiteURL = this.bucket.websiteEndpoint.apply(e => pulumi.interpolate`http://${e}`);
+            let explicitBucketName: string | undefined;
 
-        // When one or more API routes are passed in, provision an API Gateway with them.
+            if (args.protocol === "http" && args.dns?.domain && args.dns.host) {
+                explicitBucketName = this.domainName;
+            }
+
+            // Make the bucket website.
+            this.bucket = new aws.s3.Bucket(
+                "website-bucket",
+                {
+                    bucket: explicitBucketName,
+                    website: {
+                        indexDocument: args.site.defaultDoc,
+                        errorDocument: args.site.errorDoc,
+                    },
+                    acl: aws.s3.PublicReadAcl,
+                    forceDestroy: true,
+                },
+                {
+                    parent: this,
+                },
+            );
+
+            // Upload the files of the website to the bucket.
+            this.bucket.id.apply(async bucket => {
+                const root = args.site?.root;
+
+                if (!root) {
+                    return;
+                }
+
+                const files = glob.sync(`${root}/**/*`, { nodir: true });
+
+                if (pulumi.runtime.isDryRun()) {
+                    pulumi.log.info(`Skipping upload of ${files.length} files from ${root}...`)
+                    return;
+                }
+
+                try {
+                    pulumi.log.info(`Uploading ${files.length} files from ${root}...`);
+
+                    const result = await Promise.all(
+                        files.map(file => {
+                            const s3 = new aws.sdk.S3();
+
+                            return s3.putObject({
+                                Bucket: bucket,
+                                Key: file.replace(`${root}/`, ""),
+                                Body: fs.readFileSync(file),
+                                ContentType: mime.getType(file) || "text/plain",
+                                ACL: aws.s3.PublicReadAcl,
+                            }).promise();
+                        }),
+                    );
+
+                    pulumi.log.info(`Uploaded ${result.length} files.`);
+                } catch (err) {
+                    pulumi.log.error(err);
+                }
+            });
+
+            // Make a Route 53 record (CNAME) for the website.
+            if (this.bucket && explicitBucketName && args.dns?.domain && args.dns.host) {
+                const domain = args.dns.domain
+                const host = args.dns.host;
+                const bucketName = explicitBucketName;
+                const bucketEndpoint = this.bucket.websiteEndpoint;
+
+                aws.route53.getZone({ name: args.dns.domain })
+                    .then(zone => {
+                        const record = new aws.route53.Record(
+                            bucketName,
+                            {
+                                name: host,
+                                zoneId: zone.zoneId,
+                                type: "CNAME",
+                                ttl: 10 * 60,
+                                records: [
+                                    bucketEndpoint,
+                                ],
+                            },
+                            {
+                                parent: this,
+                            },
+                        );
+                    })
+                    .catch(err => {
+                        pulumi.log.info(`Domain ${domain} not found in Route 53. Not creating DNS record.`);
+                    });
+            }
+
+            // Set output properties.
+            this.outputs.bucketName = this.bucket.bucket;
+            this.outputs.bucketWebsiteURL = this.bucket.websiteEndpoint.apply(e => pulumi.interpolate`http://${e}`);
+        }
+
+        // If one or more API routes are passed in, provision an API Gateway with them.
         if (this.args.api && this.args.api.prefix && this.args.api.routes && this.args.api.routes.length > 0) {
             this.api = new awsx.apigateway.API(
                 "website-api",
@@ -174,37 +204,33 @@ export class StaticWebsite extends pulumi.ComponentResource {
                 },
             );
 
-            this.apiGatewayURL = this.api.url;
+            this.outputs.apiGatewayURL = this.api.url;
         }
 
-        // When a host and domain are present OR `cdn` is true, provision a CloudFront distribution.
-        if ((this.args.host && this.args.domain) || this.args.cdn) {
-            const cdn = this.provisionCDN();
-            const domainName = this.domainName;
-
-            this.cdnDomainName = cdn.domainName;
-            this.cdnURL = pulumi.interpolate`https://${cdn.domainName}`;
-            this.websiteURL = pulumi.output(`https://${domainName}`);
+        if (this.bucket && this.args.protocol === "https") {
+            const cdn = this.provisionCDN(this.bucket);
+            this.outputs.cdnDomainName = cdn.domainName;
+            this.outputs.cdnURL = pulumi.interpolate`https://${cdn.domainName}`;
         }
 
         this.registerOutputs({
-            bucketName: this.bucketName,
-            bucketWebsiteURL: this.bucketWebsiteURL,
-            cdnDomainName: this.cdnDomainName,
-            cdnURL: this.cdnURL,
-            websiteURL: this.websiteURL,
-            websiteLogsBucketName: this.websiteLogsBucketName,
-            apiGatewayURL: this.apiGatewayURL,
+            bucketName: this.outputs.bucketName,
+            bucketWebsiteURL: this.outputs.bucketWebsiteURL,
+            cdnDomainName: this.outputs.cdnDomainName,
+            cdnURL: this.outputs.cdnURL,
+            websiteURL: this.outputs.websiteURL,
+            websiteLogsBucketName: this.outputs.websiteLogsBucketName,
+            apiGatewayURL: this.outputs.apiGatewayURL,
         });
     }
 
-    private provisionCDN(): aws.cloudfront.Distribution {
+    private provisionCDN(bucket: aws.s3.Bucket): aws.cloudfront.Distribution {
         const cacheTtl = 10 * 60;
         let cdn: aws.cloudfront.Distribution;
 
         const bucketOrigin: aws.types.input.cloudfront.DistributionOrigin = {
-            originId: this.bucket.arn,
-            domainName: this.bucket.websiteEndpoint,
+            originId: bucket.arn,
+            domainName: bucket.websiteEndpoint,
             customOriginConfig: {
                 originProtocolPolicy: "http-only",
                 httpPort: 80,
@@ -221,13 +247,9 @@ export class StaticWebsite extends pulumi.ComponentResource {
                 bucketOrigin,
             ],
 
-            // Not specifying a default root object seems necessary, though I'm not entirely sure why.
-            // (Using index.html, or just index, leads to a 404.)
-            // defaultRootObject: undefined,
-
             defaultCacheBehavior: {
-                targetOriginId: this.bucket.arn,
-                viewerProtocolPolicy: "https-only",
+                targetOriginId: bucket.arn,
+                viewerProtocolPolicy: "redirect-to-https",
                 allowedMethods: ["GET", "HEAD", "OPTIONS"],
                 cachedMethods: ["GET", "HEAD", "OPTIONS"],
                 defaultTtl: cacheTtl,
@@ -245,7 +267,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
                 {
                     errorCode: 404,
                     responseCode: 404,
-                    responsePagePath: "/404.html",
+                    responsePagePath: `/$${this.args.site?.errorDoc || "404.html"}`,
                 },
             ],
             restrictions: {
@@ -259,92 +281,97 @@ export class StaticWebsite extends pulumi.ComponentResource {
             },
         };
 
-        if (this.args.host && this.args.domain && this.domainName) {
-
-            // Provision an validate a cert.
-            const cert = this.provisionAndValidateCert();
-
-            // Use the domain name for the CDN.
-            distributionArgs.aliases = [
-                this.domainName,
-            ];
-
-            // Use the cert.
-            distributionArgs.viewerCertificate = {
-                cloudfrontDefaultCertificate: false,
-                acmCertificateArn: cert.arn,
-                sslSupportMethod: "sni-only",
+        if (this.api && this.args.api && this.args.api.prefix) {
+            const apiGatewayOrigin: aws.types.input.cloudfront.DistributionOrigin = {
+                originId: this.api.restAPI.arn,
+                originPath: `/${this.args.api.prefix}`,
+                domainName: this.api.url.apply(url => url.replace(`/${this.args.api?.prefix}/`, "").replace("https://", "")),
+                customOriginConfig: {
+                    originProtocolPolicy: "https-only",
+                    httpPort: 80,
+                    httpsPort: 443,
+                    originSslProtocols: ["TLSv1.2"],
+                },
             };
 
-            if (this.api && this.args.api && this.args.api.prefix) {
-                const apiGatewayOrigin: aws.types.input.cloudfront.DistributionOrigin = {
-                    originId: this.api.restAPI.arn,
-                    originPath: `/${this.args.api.prefix}`,
-                    domainName: this.api.url.apply(url => url.replace(`/${this.args.api?.prefix}/`, "").replace("https://", "")),
-                    customOriginConfig: {
-                        originProtocolPolicy: "https-only",
-                        httpPort: 80,
-                        httpsPort: 443,
-                        originSslProtocols: ["TLSv1.2"],
-                    },
-                };
+            distributionArgs.origins = [
+                apiGatewayOrigin,
+                bucketOrigin,
+            ];
 
-                distributionArgs.origins = [
-                    apiGatewayOrigin,
-                    bucketOrigin,
-                ];
-
-                distributionArgs.orderedCacheBehaviors = [
-                    {
-                        pathPattern: `/${this.args.api.prefix}/*`,
-                        targetOriginId: this.api.restAPI.arn,
-                        viewerProtocolPolicy: "https-only",
-                        allowedMethods: ["GET", "HEAD", "OPTIONS"],
-                        cachedMethods: ["GET", "HEAD", "OPTIONS"],
-                        defaultTtl: 0,
-                        maxTtl: 0,
-                        minTtl: 0,
-                        forwardedValues: {
-                            queryString: true,
-                            headers: [
-                                "Access-Control-Request-Headers",
-                                "Access-Control-Request-Method",
-                                "Origin",
-                                "Authorization",
-                            ],
-                            cookies: {
-                                forward: "none",
-                            },
+            distributionArgs.orderedCacheBehaviors = [
+                {
+                    pathPattern: `/${this.args.api.prefix}/*`,
+                    targetOriginId: this.api.restAPI.arn,
+                    viewerProtocolPolicy: "https-only",
+                    allowedMethods: ["GET", "HEAD", "OPTIONS"],
+                    cachedMethods: ["GET", "HEAD", "OPTIONS"],
+                    defaultTtl: 0,
+                    maxTtl: 0,
+                    minTtl: 0,
+                    forwardedValues: {
+                        queryString: true,
+                        headers: [
+                            "Access-Control-Request-Headers",
+                            "Access-Control-Request-Method",
+                            "Origin",
+                            "Authorization",
+                        ],
+                        cookies: {
+                            forward: "none",
                         },
                     },
-                ];
-            }
-
-            cdn = this.makeCDN(distributionArgs);
-
-            // Make a new Route53 record using the host and domain name.
-            const zone = aws.route53.getZone({ name: this.args.domain });
-            const record = new aws.route53.Record(
-                this.domainName,
-                {
-                    name: this.args.host,
-                    zoneId: zone.then(zone => zone.zoneId),
-                    type: "A",
-                    aliases: [
-                        {
-                            name: cdn.domainName,
-                            zoneId: cdn.hostedZoneId,
-                            evaluateTargetHealth: true,
-                        },
-                    ],
                 },
-                {
-                    parent: this,
-                },
-            );
-        } else {
-            cdn = this.makeCDN(distributionArgs);
+            ];
         }
+
+        // If no DNS info was provided, make a CloudFront CDN with the default settings.
+        if (!this.args.dns || !this.domainName) {
+            cdn = this.makeCDN(distributionArgs);
+            return cdn;
+        }
+
+        let certARN: pulumi.Output<string>;
+
+        // If a cert ARN was passed in, use that; otherwise provision and validate a new one.
+        if (this.args.cdn && this.args.cdn.certificateARN) {
+            certARN = pulumi.output(this.args.cdn.certificateARN);
+        } else {
+            certARN = this.provisionAndValidateCert().arn;
+        }
+
+        distributionArgs.aliases = [
+            this.domainName,
+        ];
+
+        distributionArgs.viewerCertificate = {
+            cloudfrontDefaultCertificate: false,
+            acmCertificateArn: certARN,
+            sslSupportMethod: "sni-only",
+        };
+
+        cdn = this.makeCDN(distributionArgs);
+
+        // Make a Route 53 record with the host and domain name.
+        const zone = aws.route53.getZone({ name: this.args.dns.domain });
+        const record = new aws.route53.Record(
+            this.domainName,
+            {
+                name: this.args.dns.host,
+                zoneId: zone.then(zone => zone.zoneId),
+                type: "A",
+                aliases: [
+                    {
+                        name: cdn.domainName,
+                        zoneId: cdn.hostedZoneId,
+                        evaluateTargetHealth: true,
+                    },
+                ],
+            },
+            {
+                parent: this,
+            },
+        );
 
         return cdn;
     }
@@ -374,7 +401,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
             },
         );
 
-        const zone = aws.route53.getZone({ name: this.args.domain });
+        const zone = aws.route53.getZone({ name: this.args.dns?.domain });
         const validationOption = cert.domainValidationOptions[0];
 
         const certificateValidationDomain = new aws.route53.Record(
@@ -416,7 +443,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
             parent: this,
         };
 
-        if (this.args.logs) {
+        if (this.args.cdn?.logs) {
             this.logsBucket = new aws.s3.Bucket(
                 "website-logs-bucket",
                 {
@@ -434,7 +461,7 @@ export class StaticWebsite extends pulumi.ComponentResource {
 
             distributionOpts.dependsOn = [ this.logsBucket ];
 
-            this.websiteLogsBucketName = this.logsBucket.bucket;
+            this.outputs.websiteLogsBucketName = this.logsBucket.bucket;
         }
 
         return new aws.cloudfront.Distribution(
@@ -442,5 +469,12 @@ export class StaticWebsite extends pulumi.ComponentResource {
             distributionArgs,
             distributionOpts,
         );
+    }
+
+    private get domainName() {
+        if (this.args.dns && this.args.dns.domain && this.args.dns.host) {
+            return [this.args.dns.host, this.args.dns.domain].join(".");
+        }
+        return undefined;
     }
 }

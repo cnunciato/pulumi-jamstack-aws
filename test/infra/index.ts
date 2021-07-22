@@ -1,28 +1,33 @@
-import * as pulumi from "@pulumi/pulumi";
+import { Website } from "@cnunciato/pulumi-jamstack-aws";
 
-import { StaticWebsite } from "@cnunciato/pulumi-jamstack-aws";
+const site = new Website("my-site", {
+    protocol: "https",
 
-const config = new pulumi.Config();
-const siteRoot = config.require("siteRoot");
-const domain = config.get("domain");
-const host = config.get("host");
+    dns: {
+        domain: "nunciato.org",
+        host: "test-site",
+    },
 
-const site = new StaticWebsite("my-site", {
-    siteRoot,
-    domain,
-    host,
-    logs: true,
+    site: {
+        root: "../site/build",
+    },
+
+    cdn: {
+        cacheTTL: 10 * 60,
+        logs: true,
+    },
+
     api: {
         prefix: "api",
         routes: [
             {
                 method: "GET",
-                path: "/hello",
-                eventHandler: async () => {
+                path: "/hello/{name}",
+                eventHandler: async (event) => {
                     return {
                         statusCode: 200,
                         body: JSON.stringify({
-                            message: "Hello, world!!",
+                            message: `Hello, ${event.pathParameters?.name}!`,
                         }),
                     };
                 },
@@ -39,4 +44,4 @@ export const {
     apiGatewayURL,
     cdnDomainName,
     cdnURL,
-} = site;
+} = site.outputs;

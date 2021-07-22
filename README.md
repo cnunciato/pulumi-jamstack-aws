@@ -2,7 +2,17 @@
 
 A [Pulumi](https://pulumi.io/) component for managing JAMstack websites on AWS. ([What's a JAMstack](https://jamstack.wtf/)?)
 
-### Install Pulumi
+## Why do I need this component?
+
+Because while making static website may be easy, deploying them &mdash; into the cloud, on your own &mdash; is hard. This component aims to make that whole process a little less painful.
+
+## What does it do?
+
+Given a folder containing a static website, an optional domain name, and an optional set of URL routes and accompanying functions, the component deploys the website on Amazon S3, gives it a domain name with Route 53, distributes it globally with CloudFront (including SSL/TLS), and deploys the functions as a set of serverless endpoints with AWS API Gateway.
+
+## Using the component
+
+### Step 0: Install Pulumi
 
 If you haven't already, install Pulumi with your package manager of choice.
 
@@ -10,7 +20,7 @@ If you haven't already, install Pulumi with your package manager of choice.
 $ brew install pulumi
 ```
 
-### 1. Start with a folder containing a static website
+### Step 1. Make a static website
 
 If you don't already have a folder containing a static website, create an empty folder, then put a static website into it. The following snippet creates a new React app, runs an initial build, and places the built website into the `build` folder.
 
@@ -31,29 +41,15 @@ $ ls site/build
 ... index.html ...
 ```
 
-### 2. Create a Pulumi project and stack
+### Step 2. Create a Pulumi project and stack
 
-Make a new folder alongside the `my-app` folder for the Pulumi project and stack, change to that folder, and run the new-project wizard, following the prompts:
+Make a new folder alongside the `site` folder for the Pulumi project and stack, change to that folder, and run the new-project wizard, following the prompts:
 
 ```
 $ mkdir infra && cd infra
 $ pulumi new aws-typescript
 ```
-
-Configure the new stack to deploy the contents of the `../site/build` folder:
-
-```
-$ pulumi config set siteRoot ../site/build
-```
-
-Optionally, if you have a domain registered with Route53, use that to apply a custom domain name and an SSL cert:
-
-```
-$ pulumi config set domain nunciato.org
-$ pulumi config set host site-dev
-```
-
-### 3. Install this component from npm ✨
+### Step 3. Install this component from npm ✨
 
 Still in the `infra` folder, [install this component](https://www.npmjs.com/package/@cnunciato/pulumi-jamstack-aws):
 
@@ -61,36 +57,37 @@ Still in the `infra` folder, [install this component](https://www.npmjs.com/pack
 $ npm install --save @cnunciato/pulumi-jamstack-aws
 ```
 
-### 4. Modify the program to use the component
+### Step 4. Modify the program to use the component
 
 Replace the contents of `infra/index.ts` with the following program (for example), which deploys the `../site/build` folder as a static website on Amazon S3, distributes it globally with a CloudFront CDN, uses a custom domain name (via Route 53) with SSL/TLS, and adds a single serverless API endpoint using AWS Lambda:
 
 ```typescript
-import * as pulumi from "@pulumi/pulumi";
+import { Website } from "@cnunciato/pulumi-jamstack-aws";
 
-import { StaticWebsite } from "@cnunciato/pulumi-jamstack-aws";
-
-const config = new pulumi.Config();
-const siteRoot = config.require("siteRoot");
-const domain = config.get("domain");
-const host = config.get("host");
-
-const site = new StaticWebsite("my-site", {
-    siteRoot,
-    domain,
-    host,
-    logs: true,
+const site = new Website("site", {
+    protocol: "https",
+    site: {
+        root: "../site/build",
+    },
+    dns: {
+        domain: "nunciato.org",
+        host: "site-dev",
+    },
+    cdn: {
+        cacheTTL: 10 * 60,
+        logs: true,
+    },
     api: {
         prefix: "api",
         routes: [
             {
                 method: "GET",
-                path: "/hello",
-                eventHandler: async () => {
+                path: "/hello/{name}",
+                eventHandler: async (event) => {
                     return {
                         statusCode: 200,
                         body: JSON.stringify({
-                            message: "Hello, world!!",
+                            message: `Hello, ${event.pathParameters?.name}!`,
                         }),
                     };
                 },
@@ -107,10 +104,11 @@ export const {
     apiGatewayURL,
     cdnDomainName,
     cdnURL,
-} = site;
+} = site.outputs;
+
 ```
 
-### 5. Deploy!
+### Step 5. Deploy!
 
 Launch the website.
 
@@ -172,7 +170,7 @@ Resources:
 Duration: 3m55s
 ```
 
-### 6. Browse to the website and query the API endpoint
+### Step 6. Browse to the website and query the API endpoint
 
 ```
 $ open $(pulumi stack output websiteURL)
@@ -185,7 +183,7 @@ $ curl -v $(pulumi stack output websiteURL)/api/hello
 {"message":"Hello, world!!"}
 ```
 
-### 7. (Optional) Tear it all down
+### Step 7. (Optional) Tear it all down
 
 ```
 $ pulumi destroy -y
