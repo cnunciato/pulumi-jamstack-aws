@@ -57,33 +57,37 @@ Still in the `infra` folder, [install this component](https://www.npmjs.com/pack
 $ npm install --save @cnunciato/pulumi-jamstack-aws
 ```
 
-### Step 4. Modify the program to use the component
+### Step 4. Declare a website
 
 Replace the contents of `infra/index.ts` with the following program (for example), which deploys the `../site/build` folder as a static website on Amazon S3, distributes it globally with a CloudFront CDN, uses a custom domain name (via Route 53) with SSL/TLS, and adds a single serverless API endpoint using AWS Lambda:
 
 ```typescript
 import { Website } from "@cnunciato/pulumi-jamstack-aws";
 
-const site = new Website("site", {
+const site = new Website("my-site", {
     protocol: "https",
+
     site: {
-        root: "../site/build",
+        path: "../site/build",
     },
-    dns: {
-        domain: "nunciato.org",
+
+    domain: {
+        name: "nunciato.org",
         host: "site-dev",
     },
+
     cdn: {
         cacheTTL: 10 * 60,
         logs: true,
     },
+
     api: {
         prefix: "api",
         routes: [
             {
                 method: "GET",
                 path: "/hello/{name}",
-                eventHandler: async (event) => {
+                eventHandler: async (event: any) => {
                     return {
                         statusCode: 200,
                         body: JSON.stringify({
@@ -99,13 +103,12 @@ const site = new Website("site", {
 export const {
     bucketName,
     bucketWebsiteURL,
-    websiteURL,
-    websiteLogsBucketName,
-    apiGatewayURL,
     cdnDomainName,
     cdnURL,
-} = site.outputs;
-
+    apiGatewayURL,
+    websiteURL,
+    websiteLogsBucketName,
+} = site;
 ```
 
 ### Step 5. Deploy!

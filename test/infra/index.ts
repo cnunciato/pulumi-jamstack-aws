@@ -1,15 +1,15 @@
 import { Website } from "@cnunciato/pulumi-jamstack-aws";
 
 const site = new Website("my-site", {
-    protocol: "http",
-
-    dns: {
-        domain: "nunciato.org",
-        host: "test-site",
-    },
+    protocol: "https",
 
     site: {
-        root: "../site/build",
+        path: "../site/build",
+    },
+
+    domain: {
+        name: "nunciato.org",
+        host: "site-dev",
     },
 
     cdn: {

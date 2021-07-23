@@ -12,13 +12,13 @@ export interface WebsiteArgs {
     protocol?: "http" | "https";
 
     site?: {
-        root: string;
-        defaultDoc?: string;
-        errorDoc?: string;
+        path: string;
+        index?: string;
+        error?: string;
     }
 
-    dns?: {
-        domain: string;
+    domain?: {
+        name: string;
         host: string;
     };
 
@@ -76,32 +76,32 @@ export class Website extends pulumi.ComponentResource {
         // If a site was defined, make a bucket for it.
         if (args.site) {
 
-            if (!args.site.defaultDoc) {
-                args.site.defaultDoc = "index.html";
+            if (!args.site.index) {
+                args.site.index = "index.html";
             }
 
-            if (!args.site.errorDoc) {
-                args.site.errorDoc = "404.html";
+            if (!args.site.error) {
+                args.site.error = "404.html";
             }
 
             // Check that the directory exists.
-            if (!fs.existsSync(args.site.root)) {
-                pulumi.log.warn(`Directory ${args.site.root} does not exist.`);
+            if (!fs.existsSync(args.site.path)) {
+                pulumi.log.warn(`Directory ${args.site.path} does not exist.`);
             }
 
             // Check that the default document exists.
-            if (!fs.existsSync(path.join(args.site.root, args.site.defaultDoc))) {
-                pulumi.log.warn(`Default document "${args.site.defaultDoc}" does not exist.`);
+            if (!fs.existsSync(path.join(args.site.path, args.site.index))) {
+                pulumi.log.warn(`Default document "${args.site.index}" does not exist.`);
             }
 
             // Check that the error document exists.
-            if (!fs.existsSync(path.join(args.site.root, args.site.errorDoc))) {
-                pulumi.log.warn(`Default document "${args.site.errorDoc}" does not exist.`);
+            if (!fs.existsSync(path.join(args.site.path, args.site.error))) {
+                pulumi.log.warn(`Default document "${args.site.error}" does not exist.`);
             }
 
             let explicitBucketName: string | undefined;
 
-            if (args.protocol === "http" && args.dns?.domain && args.dns.host) {
+            if (args.protocol === "http" && args.domain?.name && args.domain.host) {
                 explicitBucketName = this.domainName;
             }
 
@@ -111,8 +111,8 @@ export class Website extends pulumi.ComponentResource {
                 {
                     bucket: explicitBucketName,
                     website: {
-                        indexDocument: args.site.defaultDoc,
-                        errorDocument: args.site.errorDoc,
+                        indexDocument: args.site.index,
+                        errorDocument: args.site.error,
                     },
                     acl: aws.s3.PublicReadAcl,
                     forceDestroy: true,
@@ -124,7 +124,7 @@ export class Website extends pulumi.ComponentResource {
 
             // Upload the files of the website to the bucket.
             this.bucket.id.apply(async bucket => {
-                const root = args.site?.root;
+                const root = args.site?.path;
 
                 if (!root) {
                     return;
@@ -161,13 +161,13 @@ export class Website extends pulumi.ComponentResource {
             });
 
             // Make a Route 53 record (CNAME) for the website.
-            if (this.bucket && explicitBucketName && args.dns?.domain && args.dns.host) {
-                const domain = args.dns.domain
-                const host = args.dns.host;
+            if (this.bucket && explicitBucketName && args.domain?.name && args.domain.host) {
+                const domain = args.domain.name
+                const host = args.domain.host;
                 const bucketName = explicitBucketName;
                 const bucketEndpoint = this.bucket.websiteEndpoint;
 
-                aws.route53.getZone({ name: args.dns.domain })
+                aws.route53.getZone({ name: args.domain.name })
                     .then(zone => {
                         const record = new aws.route53.Record(
                             bucketName,
@@ -175,7 +175,7 @@ export class Website extends pulumi.ComponentResource {
                                 name: host,
                                 zoneId: zone.zoneId,
                                 type: "CNAME",
-                                ttl: 10 * 60,
+                                ttl: 60, // seconds.
                                 records: [
                                     bucketEndpoint,
                                 ],
@@ -227,7 +227,7 @@ export class Website extends pulumi.ComponentResource {
     }
 
     private provisionCDN(bucket: aws.s3.Bucket): aws.cloudfront.Distribution {
-        const cacheTtl = 10 * 60;
+        const cacheTtl = this.args.cdn?.cacheTTL || (10 * 60); // 10 minutes.
         let cdn: aws.cloudfront.Distribution;
 
         const bucketOrigin: aws.types.input.cloudfront.DistributionOrigin = {
@@ -269,7 +269,7 @@ export class Website extends pulumi.ComponentResource {
                 {
                     errorCode: 404,
                     responseCode: 404,
-                    responsePagePath: `/$${this.args.site?.errorDoc || "404.html"}`,
+                    responsePagePath: `/$${this.args.site?.error || "404.html"}`,
                 },
             ],
             restrictions: {
@@ -328,7 +328,7 @@ export class Website extends pulumi.ComponentResource {
         }
 
         // If no DNS info was provided, make a CloudFront CDN with the default settings.
-        if (!this.args.dns || !this.domainName) {
+        if (!this.args.domain || !this.domainName) {
             cdn = this.makeCDN(distributionArgs);
             return cdn;
         }
@@ -355,11 +355,11 @@ export class Website extends pulumi.ComponentResource {
         cdn = this.makeCDN(distributionArgs);
 
         // Make a Route 53 record with the host and domain name.
-        const zone = aws.route53.getZone({ name: this.args.dns.domain });
+        const zone = aws.route53.getZone({ name: this.args.domain.name });
         const record = new aws.route53.Record(
             this.domainName,
             {
-                name: this.args.dns.host,
+                name: this.args.domain.host,
                 zoneId: zone.then(zone => zone.zoneId),
                 type: "A",
                 aliases: [
@@ -403,7 +403,7 @@ export class Website extends pulumi.ComponentResource {
             },
         );
 
-        const zone = aws.route53.getZone({ name: this.args.dns?.domain });
+        const zone = aws.route53.getZone({ name: this.args.domain?.name });
         const validationOption = cert.domainValidationOptions[0];
 
         const certificateValidationDomain = new aws.route53.Record(
@@ -415,7 +415,7 @@ export class Website extends pulumi.ComponentResource {
                 records: [
                     validationOption.resourceRecordValue,
                 ],
-                ttl: 10 * 60, // Ten minutes, in seconds.
+                ttl: 60, // seconds.
             },
             {
                 parent: this,
@@ -474,8 +474,8 @@ export class Website extends pulumi.ComponentResource {
     }
 
     private get domainName() {
-        if (this.args.dns && this.args.dns.domain && this.args.dns.host) {
-            return [this.args.dns.host, this.args.dns.domain].join(".");
+        if (this.args.domain && this.args.domain.name && this.args.domain.host) {
+            return [this.args.domain.host, this.args.domain.name].join(".");
         }
         return undefined;
     }
