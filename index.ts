@@ -1,1 +1,1 @@
-export { Website } from "./static-website";
+export { Website } from "./website";

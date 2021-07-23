@@ -1,7 +1,7 @@
 import { Website } from "@cnunciato/pulumi-jamstack-aws";
 
 const site = new Website("my-site", {
-    protocol: "https",
+    protocol: "http",
 
     dns: {
         domain: "nunciato.org",
@@ -23,7 +23,7 @@ const site = new Website("my-site", {
             {
                 method: "GET",
                 path: "/hello/{name}",
-                eventHandler: async (event) => {
+                eventHandler: async (event: any) => {
                     return {
                         statusCode: 200,
                         body: JSON.stringify({
@@ -39,9 +39,9 @@ const site = new Website("my-site", {
 export const {
     bucketName,
     bucketWebsiteURL,
-    websiteURL,
-    websiteLogsBucketName,
-    apiGatewayURL,
     cdnDomainName,
     cdnURL,
-} = site.outputs;
+    apiGatewayURL,
+    websiteURL,
+    websiteLogsBucketName,
+} = site;

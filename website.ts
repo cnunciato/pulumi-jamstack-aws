@@ -48,9 +48,16 @@ export class Website extends pulumi.ComponentResource {
     private bucket?: aws.s3.Bucket;
     private logsBucket?: aws.s3.Bucket;
     private api?: awsx.apigateway.API;
-
     private args: WebsiteArgs;
-    outputs: WebsiteOutputs;
+    private outputs: WebsiteOutputs;
+
+    bucketName?: pulumi.Output<string>;
+    bucketWebsiteURL?: pulumi.Output<string>;
+    websiteURL?: pulumi.Output<string>;
+    websiteLogsBucketName?: pulumi.Output<string>;
+    apiGatewayURL?: pulumi.Output<string>;
+    cdnDomainName?: pulumi.Output<string>;
+    cdnURL?: pulumi.Output<string>;
 
     /**
     * A Pulumi component resource that creates an S3 static website with an optional CloudFront CDN, domain name, and API Gateway .
@@ -181,6 +188,8 @@ export class Website extends pulumi.ComponentResource {
                     .catch(err => {
                         pulumi.log.info(`Domain ${domain} not found in Route 53. Not creating DNS record.`);
                     });
+
+                this.outputs.websiteURL = pulumi.interpolate`http://${this.domainName}`;
             }
 
             // Set output properties.
@@ -211,17 +220,10 @@ export class Website extends pulumi.ComponentResource {
             const cdn = this.provisionCDN(this.bucket);
             this.outputs.cdnDomainName = cdn.domainName;
             this.outputs.cdnURL = pulumi.interpolate`https://${cdn.domainName}`;
+            this.outputs.websiteURL = pulumi.interpolate`https://${this.domainName}`;
         }
 
-        this.registerOutputs({
-            bucketName: this.outputs.bucketName,
-            bucketWebsiteURL: this.outputs.bucketWebsiteURL,
-            cdnDomainName: this.outputs.cdnDomainName,
-            cdnURL: this.outputs.cdnURL,
-            websiteURL: this.outputs.websiteURL,
-            websiteLogsBucketName: this.outputs.websiteLogsBucketName,
-            apiGatewayURL: this.outputs.apiGatewayURL,
-        });
+        this.setOutputs();
     }
 
     private provisionCDN(bucket: aws.s3.Bucket): aws.cloudfront.Distribution {
@@ -476,5 +478,25 @@ export class Website extends pulumi.ComponentResource {
             return [this.args.dns.host, this.args.dns.domain].join(".");
         }
         return undefined;
+    }
+
+    private setOutputs() {
+        this.bucketName = this.outputs.bucketName;
+        this.bucketWebsiteURL = this.outputs.bucketWebsiteURL;
+        this.websiteURL = this.outputs.websiteURL;
+        this.websiteLogsBucketName = this.outputs.websiteLogsBucketName;
+        this.apiGatewayURL = this.outputs.apiGatewayURL;
+        this.cdnDomainName = this.outputs.cdnDomainName;
+        this.cdnURL = this.outputs.cdnURL;
+
+        this.registerOutputs({
+            bucketName: this.outputs.bucketName,
+            bucketWebsiteURL: this.outputs.bucketWebsiteURL,
+            cdnDomainName: this.outputs.cdnDomainName,
+            cdnURL: this.outputs.cdnURL,
+            websiteURL: this.outputs.websiteURL,
+            websiteLogsBucketName: this.outputs.websiteLogsBucketName,
+            apiGatewayURL: this.outputs.apiGatewayURL,
+        });
     }
 }
