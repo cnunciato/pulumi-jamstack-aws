@@ -4,7 +4,7 @@ A [Pulumi](https://pulumi.io/) component for managing JAMstack websites on AWS. 
 
 ## Why do I need this component?
 
-Because while making static website may be easy, deploying them &mdash; into the cloud, on your own &mdash; is hard. This component aims to make that whole process a little less painful.
+Making static websites is easy, but deploying them &mdash; into the cloud, on your own &mdash; is hard. This component aims to make that whole process a little less painful.
 
 ## What does it do?
 
@@ -123,54 +123,55 @@ Previewing update (dev)
 
 Updating (dev)
 
-View Live: https://app.pulumi.com/cnunciato/pulumi-jamstack-aws-test-npm-infra/dev/updates/1
+View Live: https://app.christian.pulumi-dev.io/cnunciato/pulumi-jamstack-aws-test-npm-infra/dev/updates/1
 
-     Type                                             Name                                    Status      Info
- +   pulumi:pulumi:Stack                              pulumi-jamstack-aws-test-npm-infra-dev  created     2 messages
- +   └─ pulumi-s3-static-website:index:StaticWebsite  my-site                                 created
- +      ├─ aws:apigateway:x:API                       website-api                             created
- +      │  ├─ aws:iam:Role                            website-api556be5ef                     created
- +      │  ├─ aws:lambda:Function                     website-api556be5ef                     created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-6c156834            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-a1de8170            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-7cd09230            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-4aaabb8e            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-74d12784            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-1b4caae3            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-019020e7            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-b5aeb6b6            created
- +      │  ├─ aws:iam:RolePolicyAttachment            website-api556be5ef-e1a3786d            created
- +      │  ├─ aws:apigateway:RestApi                  website-api                             created
- +      │  ├─ aws:apigateway:Deployment               website-api                             created
- +      │  ├─ aws:lambda:Permission                   website-api-25e7c55b                    created
- +      │  └─ aws:apigateway:Stage                    website-api                             created
- +      ├─ pulumi:providers:aws                       website-cert-provider                   created
- +      ├─ aws:s3:Bucket                              website-logs-bucket                     created
- +      ├─ aws:s3:Bucket                              website-bucket                          created
- +      ├─ aws:acm:Certificate                        website-cert                            created
- +      ├─ aws:route53:Record                         website-cert-validation-record          created
- +      ├─ aws:cloudfront:Distribution                website-cdn                             created
- +      ├─ aws:acm:CertificateValidation              website-cert-validation                 created
- +      └─ aws:route53:Record                         site-dev.nunciato.org                   created
+     Type                                       Name                                    Status      Info
+ +   pulumi:pulumi:Stack                        pulumi-jamstack-aws-test-npm-infra-dev  created     1 warning; 2 messages
+ +   └─ pulumi-s3-static-website:index:Website  my-site                                 created
+ +      ├─ aws:apigateway:x:API                 website-api                             created
+ +      │  ├─ aws:iam:Role                      website-api6ec0544c                     created
+ +      │  ├─ aws:lambda:Function               website-api6ec0544c                     created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-4aaabb8e            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-74d12784            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-a1de8170            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-b5aeb6b6            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-6c156834            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-7cd09230            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-e1a3786d            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-019020e7            created
+ +      │  ├─ aws:iam:RolePolicyAttachment      website-api6ec0544c-1b4caae3            created
+ +      │  ├─ aws:apigateway:RestApi            website-api                             created
+ +      │  ├─ aws:apigateway:Deployment         website-api                             created
+ +      │  ├─ aws:lambda:Permission             website-api-c4bbce9d                    created
+ +      │  └─ aws:apigateway:Stage              website-api                             created
+ +      ├─ pulumi:providers:aws                 website-cert-provider                   created
+ +      ├─ aws:s3:Bucket                        website-logs-bucket                     created
+ +      ├─ aws:s3:Bucket                        website-bucket                          created
+ +      ├─ aws:acm:Certificate                  website-cert                            created
+ +      ├─ aws:route53:Record                   website-cert-validation-record          created
+ +      ├─ aws:cloudfront:Distribution          website-cdn                             created
+ +      ├─ aws:acm:CertificateValidation        website-cert-validation                 created
+ +      └─ aws:route53:Record                   site-dev.nunciato.org                   created
 
 Diagnostics:
   pulumi:pulumi:Stack (pulumi-jamstack-aws-test-npm-infra-dev):
+    warning: Default document "404.html" does not exist.
     Uploading 19 files from ../site/build...
     Uploaded 19 files.
 
 Outputs:
-    apiGatewayURL        : "https://ahb7yks8ne.execute-api.us-west-2.amazonaws.com/api/"
-    bucketName           : "website-bucket-ba59ae4"
-    bucketWebsiteURL     : "http://website-bucket-ba59ae4.s3-website-us-west-2.amazonaws.com"
-    cdnDomainName        : "d3u94s721ztogo.cloudfront.net"
-    cdnURL               : "https://d3u94s721ztogo.cloudfront.net"
-    websiteLogsBucketName: "website-logs-bucket-f9c977a"
+    apiGatewayURL        : "https://u7kqxfecol.execute-api.us-west-2.amazonaws.com/api/"
+    bucketName           : "website-bucket-bf3bb7b"
+    bucketWebsiteURL     : "http://website-bucket-bf3bb7b.s3-website-us-west-2.amazonaws.com"
+    cdnDomainName        : "d2kgpg37ae61cs.cloudfront.net"
+    cdnURL               : "https://d2kgpg37ae61cs.cloudfront.net"
+    websiteLogsBucketName: "website-logs-bucket-cdddca9"
     websiteURL           : "https://site-dev.nunciato.org"
 
 Resources:
     + 26 created
 
-Duration: 3m55s
+Duration: 4m8s
 ```
 
 ### Step 6. Browse to the website and query the API endpoint
@@ -182,8 +183,8 @@ $ open $(pulumi stack output websiteURL)
 ![image](https://user-images.githubusercontent.com/274700/126080824-4cf49b45-4c93-4897-9c0f-e881acf3d4c0.png)
 
 ```
-$ curl -v $(pulumi stack output websiteURL)/api/hello
-{"message":"Hello, world!!"}
+$ curl -v $(pulumi stack output websiteURL)/api/hello/chris
+{"message":"Hello, chris!"}
 ```
 
 ### Step 7. (Optional) Tear it all down
