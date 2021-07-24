@@ -29,6 +29,7 @@ export interface WebsiteArgs {
     }
 
     api?: {
+        stage?: string;
         prefix: string;
         routes: WebsiteAPIRoute[];
     }
@@ -71,6 +72,10 @@ export class Website extends pulumi.ComponentResource {
         // Apply defaults.
         if (!args.protocol) {
             args.protocol = "http";
+        }
+
+        if (args.api && !args.api.stage) {
+            args.api.stage = "stage";
         }
 
         // If a site was defined, make a bucket for it.
@@ -202,7 +207,7 @@ export class Website extends pulumi.ComponentResource {
             this.api = new awsx.apigateway.API(
                 "website-api",
                 {
-                    stageName: this.args.api.prefix,
+                    stageName: this.args.api.stage,
                     routes: this.args.api.routes.map(route => {
                         route.path = `/${this.args.api?.prefix}${route.path}`;
                         return route;
@@ -286,8 +291,8 @@ export class Website extends pulumi.ComponentResource {
         if (this.api && this.args.api && this.args.api.prefix) {
             const apiGatewayOrigin: aws.types.input.cloudfront.DistributionOrigin = {
                 originId: this.api.restAPI.arn,
-                originPath: `/${this.args.api.prefix}`,
-                domainName: this.api.url.apply(url => url.replace(`/${this.args.api?.prefix}/`, "").replace("https://", "")),
+                originPath: `/${this.args.api.stage}`,
+                domainName: this.api.url.apply(url => url.replace(`/${this.args.api?.stage}/`, "").replace("https://", "")),
                 customOriginConfig: {
                     originProtocolPolicy: "https-only",
                     httpPort: 80,

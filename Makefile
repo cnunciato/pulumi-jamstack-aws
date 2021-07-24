@@ -10,6 +10,10 @@ ensure:
 publish:
 	./scripts/publish.sh
 
-.PHONY: test
-test:
-	./scripts/test.sh
+.PHONY: test-deploy
+test-deploy:
+	./scripts/test.sh up
+
+.PHONY: test-destroy
+test-destroy:
+	./scripts/test.sh destroy
